@@ -99,7 +99,7 @@ def load_config(api_url: str | None = None, key: str | None = None,
     return Config(
         api_url=(api_url or _first("SIGNALPIPE_API_URL", "MANTIDAE_API_URL",
                                     default=DEFAULT_API_URL)).rstrip("/"),
-        key=key or _first("SIGNALPIPE_KEY", "MANTIDAE_KEY"),
+        key=key or _first("SIGNALPIPE_KEY", "SIGNALPIPE_OPERATOR_KEY", "MANTIDAE_KEY"),
         reddit_client_id=_first("REDDIT_CLIENT_ID"),
         reddit_client_secret=_first("REDDIT_CLIENT_SECRET"),
         reddit_username=_first("REDDIT_USERNAME"),

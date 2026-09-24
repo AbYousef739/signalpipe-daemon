@@ -2,15 +2,16 @@
 
 **The user-side sender for [SignalPipe](https://signalpipe.io) v4.**
 
-> SignalPipe is the intelligence layer for outreach. We never see your Reddit
-> credentials, never see your LLM keys, never store your prospects.
+> SignalPipe is the judgement layer for outreach. We never see your Reddit or X
+> credentials and never see your LLM keys.
 > **The math runs on us. The sending runs on you.**
 
 This daemon holds a Server-Sent-Events stream open to your SignalPipe brain,
 receives missions the brain has already scored, drafted, and approved, posts
 them with **your own** platform credentials, and acknowledges the result. It
-never sees your LLM keys, never scores or drafts anything itself, and stores no
-prospects. It only sends.
+never sees your LLM keys, never scores or drafts anything itself, and keeps no
+copy of your pipeline on this machine. It only sends. (Your leads and prospects
+live in the managed brain, scoped to your account.)
 
 ## Install
 
@@ -31,7 +32,7 @@ A real environment variable always wins over a `.env` entry.
 
 | Variable | Purpose |
 | --- | --- |
-| `SIGNALPIPE_KEY` | **Required.** Your operator key from the dashboard. |
+| `SIGNALPIPE_KEY` | **Required.** Your operator key from the dashboard. `SIGNALPIPE_OPERATOR_KEY` (the plugin's name for it) is accepted too. |
 | `SIGNALPIPE_API_URL` | Brain URL. Defaults to `https://api.signalpipe.io`. |
 | `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_USERNAME` / `REDDIT_PASSWORD` | A Reddit *script* app on your sending account. Enables `reddit_comment` and `reddit_dm`. |
 | `X_API_KEY` / `X_API_SECRET` / `X_ACCESS_TOKEN` / `X_ACCESS_SECRET` | X / Twitter app creds. Enables `twitter_reply`. |
@@ -41,6 +42,12 @@ A real environment variable always wins over a `.env` entry.
 
 Your platform credentials stay on your machine. They are used only to talk to
 Reddit / X directly and are **never** sent to SignalPipe.
+
+**Reddit API access.** Since 11 November 2025 Reddit issues new API apps only
+after a manual approval (its Responsible Builder Policy). If you do not already
+have a script app, leave the `REDDIT_*` variables unset: approve drafts in your
+agent, post them yourself, and mark them sent. **X** sending needs an X API
+account on pay-per-use pricing (since February 2026), billed to you by X.
 
 ## Run
 
