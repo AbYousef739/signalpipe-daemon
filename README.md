@@ -68,6 +68,10 @@ is treated as transient. Stop with `Ctrl-C`.
 2. The daemon posts the pre-written draft on the mission's channel
    (`twitter_reply`, `reddit_comment`, or `reddit_dm`) using your credentials.
    Missions on the `manual` channel are skipped — you send those yourself.
+   A `reddit_dm` goes only to someone who asked for a private message: Reddit
+   and X both require the recipient's consent before an app sends one. X also
+   bans automated replies to posts found by keyword search, so `twitter_reply`
+   and `reddit_dm` missions are never auto-approved; each waits for you.
 3. The daemon acks the outcome. A failure tagged `banned` or `rate_limited`
    tells the brain to pause your stream for a cool-down.
 
