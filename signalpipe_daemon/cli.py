@@ -1,4 +1,4 @@
-"""Command-line entry point: `signalpipe-daemon run` / `status`."""
+"""Command-line entry point: `signalpipe-daemon run` / `read` / `preview` / `status`."""
 from __future__ import annotations
 
 import argparse
@@ -33,6 +33,23 @@ def _build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--dry-run", action="store_true",
                        help="Log intended sends without posting or acking.")
 
+    read_p = sub.add_parser(
+        "read", help="Read your client-side stations on this machine and send "
+                     "the posts to the brain for judging.")
+    read_p.add_argument("--once", action="store_true",
+                        help="One pass, then exit (for cron).")
+    read_p.add_argument("--interval", type=int, default=1800,
+                        help="Seconds between passes (default 1800).")
+
+    prev_p = sub.add_parser(
+        "preview", help="Check a feed for buyers before adding it as a station "
+                        "(read here, judged by the brain, nothing saved).")
+    prev_p.add_argument("--product", required=True,
+                        help="Product id to judge the feed against.")
+    prev_p.add_argument("--url", required=True, help="The feed to check.")
+    prev_p.add_argument("--sample", type=int, default=None,
+                        help="Posts for the judges, 1-12 (default 8; one judgement each).")
+
     sub.add_parser("status", help="Print account/queue status and exit.")
     return p
 
@@ -63,6 +80,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if command == "run":
         return run(config, dry_run=getattr(args, "dry_run", False))
+
+    if command == "read":
+        from .reader import run_reader
+        client = SignalPipeClient(config.api_url, config.key)
+        return run_reader(client, interval_s=args.interval, once=args.once)
+
+    if command == "preview":
+        from .reader import preview
+        client = SignalPipeClient(config.api_url, config.key)
+        return preview(client, args.product, args.url, sample=args.sample)
 
     parser.print_help()
     return 0

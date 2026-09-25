@@ -10,15 +10,17 @@ This daemon holds a Server-Sent-Events stream open to your SignalPipe brain,
 receives missions the brain has already scored, drafted, and approved, posts
 them with **your own** platform credentials, and acknowledges the result. It
 never sees your LLM keys, never scores or drafts anything itself, and keeps no
-copy of your pipeline on this machine. It only sends. (Your leads and prospects
+copy of your pipeline on this machine. It sends, and it can read feeds on this
+machine for the brain to judge (`read`, `preview`). (Your leads and prospects
 live in the managed brain, scoped to your account.)
 
 ## Install
 
 ```bash
-pip install "signalpipe-daemon[all]"     # both Reddit + X senders
+pip install "signalpipe-daemon[all]"     # both senders + the feed reader
 pip install "signalpipe-daemon[reddit]"  # Reddit only
 pip install "signalpipe-daemon[twitter]" # X / Twitter only
+pip install "signalpipe-daemon[reader]"  # read and preview feeds on this machine
 pip install signalpipe-daemon            # base; pulls only `requests`
 ```
 
@@ -61,6 +63,41 @@ signalpipe-daemon run --dry-run   # log intended sends without posting or acking
 network drop. A rejected key (401) is fatal and exits non-zero; everything else
 is treated as transient. Stop with `Ctrl-C`.
 
+## Read your feeds on this machine
+
+Some of your stations can be read from your own machine instead of by the
+brain. The brain marks them `read_by: "client"` in `/stations/list`; the
+reader fetches those feeds from here, at most 50 posts per feed with a pause
+between feeds, and sends each page to the brain for judging. The posts then go
+through the same scoring, judges and missions as any other station, and
+approved missions reach `run` as usual.
+
+```bash
+signalpipe-daemon read            # a pass every 30 minutes, until Ctrl-C
+signalpipe-daemon read --once     # one pass and exit, for cron
+```
+
+Run it beside `run`, in its own terminal or service. A station the brain has
+just judged is skipped for a few minutes, so an extra pass costs nothing.
+
+## Check a feed before you add it
+
+Which communities you listen to decides results more than any setting. `preview`
+reads a candidate feed on this machine, sends its posts to the brain, and the
+brain's judges read the ones that match your product best. Nothing is saved.
+
+```bash
+signalpipe-daemon preview --product <product-id> --url https://www.reddit.com/r/SUBREDDIT/new/.rss
+```
+
+The verdict comes from thresholds fixed in advance: **VIABLE** (real buyers post
+here), **MARGINAL** (a trickle), **ON-TOPIC, NOT IN-MARKET** (people discuss your
+topic but nobody is asking to buy), **NO BUYERS**, or **NO DATA** (nothing could
+be judged; the explanation says why, such as an empty or stale feed or keywords
+that blocked every post). Each judged post costs one judgement (8 by default,
+`--sample` changes it). If this machine cannot read the feed, the brain is asked
+to fetch it.
+
 ## How a mission flows
 
 1. The brain scores a signal, drafts a reply, and (once approved) marks the
@@ -70,8 +107,11 @@ is treated as transient. Stop with `Ctrl-C`.
    Missions on the `manual` channel are skipped — you send those yourself.
    A `reddit_dm` goes only to someone who asked for a private message: Reddit
    and X both require the recipient's consent before an app sends one. X also
-   bans automated replies to posts found by keyword search, so `twitter_reply`
-   and `reddit_dm` missions are never auto-approved; each waits for you.
+   bans automated replies to posts found by keyword search, and Reddit acts
+   against automated comments, so `twitter_reply`, `reddit_comment` and
+   `reddit_dm` missions are never auto-approved; each waits for you. The drafts
+   are written by AI: Reddit asks that AI-generated content be disclosed, so
+   read and edit each one in your own words before you approve it.
 3. The daemon acks the outcome. A failure tagged `banned` or `rate_limited`
    tells the brain to pause your stream for a cool-down.
 

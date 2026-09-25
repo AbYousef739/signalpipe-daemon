@@ -9,4 +9,4 @@ sees your LLM keys, never scores or drafts anything itself, and keeps no copy
 of your pipeline on this machine. It only sends.
 """
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
