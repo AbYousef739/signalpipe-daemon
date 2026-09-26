@@ -2,7 +2,7 @@
 
 The brain marks some of your stations ``read_by: "client"``. Those feeds are
 never fetched by SignalPipe's servers; this reader fetches them from your
-machine, the same way the scout would (at most 50 posts per feed, a pause
+machine, the same way the scout would (at most 50 posts per feed, a minute
 between feeds), and hands each page to ``POST /scout/ingest``. The brain then
 scores the posts exactly as if its own scout had read them: same dedup, gates,
 judges and missions, which reach your queue and the send stream as usual.
@@ -14,6 +14,7 @@ judges and missions, which reach your queue and the send stream as usual.
 """
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 from typing import Callable, Iterable, Optional
@@ -21,7 +22,11 @@ from typing import Callable, Iterable, Optional
 from . import __version__
 
 DEFAULT_INTERVAL_S = 1800        # the scout's own cadence
-FEED_DELAY_S = 5                 # pause between feeds, as the scout does
+# Reddit limits how fast one machine may read its feeds. Five seconds apart,
+# every feed after the first came back HTTP 429 (2026-09-26), so five of six
+# stations were never read; a minute apart, every fetch came back.
+FEED_DELAY_S = int(os.getenv("SIGNALPIPE_FEED_DELAY_S", "60"))   # pause between feeds
+RATE_LIMIT_RETRY_S = 120         # wait after an HTTP 429 before the one retry
 MAX_ENTRIES = 50                 # one feed page; the brain accepts up to 50
 USER_AGENT = (f"signalpipe-daemon/{__version__} "
               "(+https://github.com/AbYousef739/signalpipe-daemon)")
@@ -35,6 +40,15 @@ def _get(entry, key, default=None):
         except TypeError:
             pass
     return getattr(entry, key, default)
+
+
+def _http_status(parsed) -> Optional[int]:
+    """The HTTP status feedparser recorded for a fetch, or None (a file, a test)."""
+    code = _get(parsed, "status")
+    try:
+        return int(code) if code is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _iso(struct) -> Optional[str]:
@@ -81,7 +95,8 @@ def read_once(client, *, fetch: Optional[Callable] = None,
     # The station list comes first: a rejected key or "nothing to read" needs no
     # feed library, so a machine without feedparser can still run a clean pass.
     stations = client_stations(client.list_stations())
-    counts = {"stations": len(stations), "sent": 0, "entries": 0, "empty": 0, "skipped": 0, "errors": 0}
+    counts = {"stations": len(stations), "sent": 0, "entries": 0, "empty": 0, "skipped": 0,
+              "rate_limited": 0, "errors": 0}
     if not stations:
         log("reader: no stations are marked for this machine (read_by=client); nothing to do.")
         return counts
@@ -97,7 +112,22 @@ def read_once(client, *, fetch: Optional[Callable] = None,
             sleep(FEED_DELAY_S)
         name = station.get("name") or station.get("id")
         try:
-            entries = entries_from_feed(fetch(station["rss_url"], agent=USER_AGENT))
+            parsed = fetch(station["rss_url"], agent=USER_AGENT)
+            if _http_status(parsed) == 429:
+                log(f"reader: {name}: Reddit is limiting requests from this machine (HTTP 429); "
+                    f"trying again in {RATE_LIMIT_RETRY_S}s")
+                sleep(RATE_LIMIT_RETRY_S)
+                parsed = fetch(station["rss_url"], agent=USER_AGENT)
+                if _http_status(parsed) == 429:
+                    counts["rate_limited"] += 1
+                    log(f"reader: {name}: still limited; it will be read on the next pass")
+                    continue
+            code = _http_status(parsed)
+            if code is not None and code >= 400:
+                counts["errors"] += 1
+                log(f"reader: {name}: the feed answered HTTP {code}; check that the address still works")
+                continue
+            entries = entries_from_feed(parsed)
             if not entries:
                 counts["empty"] += 1
                 log(f"reader: {name}: the feed returned no posts")
@@ -128,7 +158,8 @@ def run_reader(client, *, interval_s: int = DEFAULT_INTERVAL_S, once: bool = Fal
         try:
             counts = read_once(client, log=log)
             log(f"reader: pass done: {counts['sent']} of {counts['stations']} feeds sent, "
-                f"{counts['entries']} posts, {counts['skipped']} skipped, {counts['errors']} errors")
+                f"{counts['entries']} posts, {counts['skipped']} skipped, "
+                f"{counts.get('rate_limited', 0)} rate-limited, {counts['errors']} errors")
         except AuthError:
             log("reader: operator key rejected (401).")
             return 2
@@ -159,7 +190,12 @@ def preview(client, product_id: str, url: str, *, sample: Optional[int] = None,
         if fetch is None:
             import feedparser  # extra: pip install "signalpipe-daemon[reader]"
             fetch = feedparser.parse
-        entries = entries_from_feed(fetch(url, agent=USER_AGENT))
+        parsed = fetch(url, agent=USER_AGENT)
+        if _http_status(parsed) == 429:
+            log("preview: Reddit is limiting requests from this machine (HTTP 429). "
+                "Try again in a few minutes.")
+            return 1
+        entries = entries_from_feed(parsed)
         if not entries:
             local_error = "the feed returned no posts"
     except ImportError:

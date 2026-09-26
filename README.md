@@ -61,6 +61,7 @@ sets it for the current window only.
 | `MAX_TWITTER_ACTIONS_PER_DAY` | Default 10. |
 | `MAX_REDDIT_DMS_PER_DAY` | Default 5. |
 | `MAX_REDDIT_COMMENTS_PER_DAY` | Default 15. |
+| `SIGNALPIPE_FEED_DELAY_S` | Seconds between feeds when reading. Default 60: Reddit limits how fast one machine may read, and answers faster reads with HTTP 429. |
 
 Your platform credentials stay on your machine. They are used only to talk to
 Reddit / X directly and are **never** sent to SignalPipe.
@@ -87,7 +88,7 @@ is treated as transient. Stop with `Ctrl-C`.
 
 Some of your stations can be read from your own machine instead of by the
 brain. The brain marks them `read_by: "client"` in `/stations/list`; the
-reader fetches those feeds from here, at most 50 posts per feed with a pause
+reader fetches those feeds from here, at most 50 posts per feed and a minute
 between feeds, and sends each page to the brain for judging. The posts then go
 through the same scoring, judges and missions as any other station, and
 approved missions reach `run` as usual.

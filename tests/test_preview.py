@@ -64,6 +64,13 @@ def test_preview_falls_back_to_the_brain_when_the_feed_cannot_be_read_here():
     assert client.calls[0]["rss_url"] == URL
 
 
+def test_preview_says_when_reddit_is_limiting_this_machine():
+    client, logs = _Client(), []
+    assert reader.preview(client, "p1", URL, fetch=lambda *a, **k: {"status": 429, "entries": []},
+                          log=logs.append) == 1
+    assert client.calls == [] and any("HTTP 429" in m for m in logs)
+
+
 def test_preview_exit_codes():
     assert reader.preview(_Client(auth_fail=True), "p1", URL, fetch=_feed, log=lambda m: None) == 2
     logs = []

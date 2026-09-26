@@ -86,7 +86,8 @@ def test_read_once_fetches_client_stations_and_sends_each_page():
     assert slept == [reader.FEED_DELAY_S]                             # a pause between the two feeds
     assert [sid for sid, _ in client.ingested] == ["s1", "s3"]
     assert client.ingested[0][1][0]["published"] == "2026-09-25T09:01:00Z"
-    assert counts == {"stations": 2, "sent": 2, "entries": 4, "empty": 0, "skipped": 0, "errors": 0}
+    assert counts == {"stations": 2, "sent": 2, "entries": 4, "empty": 0, "skipped": 0,
+                      "rate_limited": 0, "errors": 0}
 
 
 def test_read_once_counts_empty_feeds_skips_and_errors_and_carries_on():
@@ -105,6 +106,39 @@ def test_read_once_counts_empty_feeds_skips_and_errors_and_carries_on():
                               sleep=lambda s: None, log=logs.append)
     assert counts["skipped"] == 2 and counts["sent"] == 0
     assert any("cooldown" in m and "120s" in m for m in logs)
+
+
+def test_feeds_are_read_a_minute_apart_by_default():
+    if "SIGNALPIPE_FEED_DELAY_S" not in os.environ:
+        assert reader.FEED_DELAY_S == 60
+
+
+def test_a_throttled_feed_is_retried_once_after_a_longer_wait():
+    replies = {REDDIT: [{"status": 429, "entries": []}, {"status": 200, "entries": [_entry(1)]}],
+               FORUM: [{"status": 200, "entries": [_entry(2)]}]}
+    slept, logs = [], []
+    client = _Client(_stations())
+    counts = reader.read_once(client, fetch=lambda u, agent=None: replies[u].pop(0),
+                              sleep=slept.append, log=logs.append)
+    assert slept == [reader.RATE_LIMIT_RETRY_S, reader.FEED_DELAY_S]
+    assert counts["sent"] == 2 and counts["rate_limited"] == 0
+    assert any("HTTP 429" in m for m in logs)
+
+
+def test_a_feed_still_throttled_is_counted_and_left_for_the_next_pass():
+    client, logs = _Client(_stations()), []
+    counts = reader.read_once(client, fetch=lambda u, agent=None: {"status": 429, "entries": []},
+                              sleep=lambda s: None, log=logs.append)
+    assert counts["rate_limited"] == 2 and counts["empty"] == 0 and client.ingested == []
+    assert any("next pass" in m for m in logs)
+
+
+def test_an_http_error_is_reported_as_one_not_as_an_empty_feed():
+    logs = []
+    counts = reader.read_once(_Client(_stations()), fetch=lambda u, agent=None: {"status": 404, "entries": []},
+                              sleep=lambda s: None, log=logs.append)
+    assert counts["errors"] == 2 and counts["empty"] == 0
+    assert any("HTTP 404" in m for m in logs)
 
 
 def test_nothing_marked_for_this_machine_means_nothing_fetched():

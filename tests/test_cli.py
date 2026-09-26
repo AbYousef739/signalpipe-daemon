@@ -36,4 +36,5 @@ def test_python_dash_m_runs_the_cli():
     out = subprocess.run([sys.executable, "-m", "signalpipe_daemon", "--version"],
                          cwd=ROOT, capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
-    assert "signalpipe-daemon 1.1.1" in out.stdout
+    from signalpipe_daemon import __version__
+    assert f"signalpipe-daemon {__version__}" in out.stdout
