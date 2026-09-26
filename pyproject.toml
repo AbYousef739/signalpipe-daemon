@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "signalpipe-daemon"
-version = "1.1.0"
+version = "1.1.1"
 description = "User-side sender for SignalPipe v4 — streams pre-drafted, pre-approved missions and posts them with your own Reddit/X credentials. The math runs on SignalPipe; the sending runs on you."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Communications",
 ]
-dependencies = ["requests>=2.28"]
+dependencies = ["requests>=2.28", "truststore>=0.10; python_version >= '3.10'"]
 
 [project.optional-dependencies]
 reddit = ["praw>=7.7"]

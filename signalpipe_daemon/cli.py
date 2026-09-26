@@ -54,9 +54,27 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _use_system_certificates() -> None:
+    """Check HTTPS certificates against this computer's own certificate store.
+
+    Antivirus HTTPS scanning (Norton, Avast, Kaspersky) and company proxies
+    re-sign secure connections with a root certificate that only the operating
+    system's store knows. With the list bundled into Python's requests library,
+    every call to the brain on such a machine failed with
+    CERTIFICATE_VERIFY_FAILED. truststore is installed with the daemon on
+    Python 3.10 and later; on older Pythons this does nothing.
+    """
+    try:
+        import truststore
+    except ImportError:
+        return
+    truststore.inject_into_ssl()
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _use_system_certificates()
 
     config = load_config(api_url=args.api_url, key=args.key)
     if not config.key:

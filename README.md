@@ -27,10 +27,30 @@ pip install signalpipe-daemon            # base; pulls only `requests`
 The platform SDKs (`praw`, `tweepy`) are optional extras and are imported only
 when a mission for that channel actually arrives — install just the ones you use.
 
+**On Windows**, run pip through Python's launcher. The Python installer usually
+leaves `pip` and the `signalpipe-daemon` command off your PATH, so PowerShell
+answers "is not recognized":
+
+```powershell
+py -m pip install "signalpipe-daemon[reader]"
+py -m signalpipe_daemon status
+```
+
+Every `signalpipe-daemon` command below also works as `py -m signalpipe_daemon`
+(or `python -m signalpipe_daemon`).
+
+The daemon checks HTTPS certificates against your computer's own certificate
+store, so antivirus HTTPS scanning (Norton, Avast, Kaspersky) and company proxies
+work without extra setup (Python 3.10 and later).
+
 ## Configure
 
 Copy `.env.example` to `.env` and fill it in, or export the variables directly.
 A real environment variable always wins over a `.env` entry.
+
+In PowerShell, `setx SIGNALPIPE_KEY "your-operator-key"` saves the key for every
+new window (open a new one afterwards); `$env:SIGNALPIPE_KEY = "your-operator-key"`
+sets it for the current window only.
 
 | Variable | Purpose |
 | --- | --- |
