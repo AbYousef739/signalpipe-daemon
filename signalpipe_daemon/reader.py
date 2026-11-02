@@ -31,6 +31,22 @@ MAX_ENTRIES = 50                 # one feed page; the brain accepts up to 50
 USER_AGENT = (f"signalpipe-daemon/{__version__} "
               "(+https://github.com/AbYousef739/signalpipe-daemon)")
 
+# Reddit ends its RSS feeds, and its unauthenticated .json addresses, on
+# 13 November 2026 (announced 30 September 2026). From then a Reddit feed is not
+# fetched at all: it is reported as ended, so the operator can pause or remove
+# it instead of reading "the feed answered HTTP 403".
+REDDIT_FEEDS_END = datetime(2026, 11, 13, tzinfo=timezone.utc)
+
+
+def is_reddit_feed(url) -> bool:
+    from urllib.parse import urlparse
+    host = (urlparse(str(url or "")).hostname or "").lower()
+    return host in ("reddit.com", "redd.it") or host.endswith(".reddit.com")
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
 
 def _get(entry, key, default=None):
     """feedparser entries answer both .get() and attribute access."""
@@ -96,7 +112,7 @@ def read_once(client, *, fetch: Optional[Callable] = None,
     # feed library, so a machine without feedparser can still run a clean pass.
     stations = client_stations(client.list_stations())
     counts = {"stations": len(stations), "sent": 0, "entries": 0, "empty": 0, "skipped": 0,
-              "rate_limited": 0, "errors": 0}
+              "rate_limited": 0, "errors": 0, "reddit_ended": 0}
     if not stations:
         log("reader: no stations are marked for this machine (read_by=client); nothing to do.")
         return counts
@@ -107,10 +123,19 @@ def read_once(client, *, fetch: Optional[Callable] = None,
             raise SystemExit('feedparser is not installed: pip install "signalpipe-daemon[reader]"') from e
         fetch = feedparser.parse
 
-    for i, station in enumerate(stations):
-        if i and FEED_DELAY_S:
-            sleep(FEED_DELAY_S)
+    reddit_ended = _now() >= REDDIT_FEEDS_END
+    fetched = 0
+    for station in stations:
         name = station.get("name") or station.get("id")
+        if reddit_ended and is_reddit_feed(station.get("rss_url")):
+            counts["reddit_ended"] += 1
+            log(f"reader: {name}: Reddit ended its RSS feeds on 13 November 2026, so this feed can "
+                "no longer be read. Pause or remove it, and add a forum, a Q&A site or a Hacker "
+                "News search instead.")
+            continue
+        if fetched and FEED_DELAY_S:
+            sleep(FEED_DELAY_S)
+        fetched += 1
         try:
             parsed = fetch(station["rss_url"], agent=USER_AGENT)
             if _http_status(parsed) == 429:
@@ -159,7 +184,9 @@ def run_reader(client, *, interval_s: int = DEFAULT_INTERVAL_S, once: bool = Fal
             counts = read_once(client, log=log)
             log(f"reader: pass done: {counts['sent']} of {counts['stations']} feeds sent, "
                 f"{counts['entries']} posts, {counts['skipped']} skipped, "
-                f"{counts.get('rate_limited', 0)} rate-limited, {counts['errors']} errors")
+                f"{counts.get('rate_limited', 0)} rate-limited, {counts['errors']} errors"
+                + (f", {counts['reddit_ended']} Reddit feeds ended (Reddit stopped its RSS feeds on 13 November 2026)"
+                   if counts.get("reddit_ended") else ""))
         except AuthError:
             log("reader: operator key rejected (401).")
             return 2

@@ -10,6 +10,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from signalpipe_daemon import reader                              # noqa: E402
 from signalpipe_daemon.client import AuthError                    # noqa: E402
+from datetime import datetime, timezone                           # noqa: E402
+
+# A fixed day before Reddit ends its feeds (13 November 2026), so the tests below
+# that read a Reddit feed keep passing after it. The two tests at the end move it.
+BEFORE_END = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+reader._now = lambda: BEFORE_END
 
 REDDIT = "https://www.reddit.com/r/smallbusiness/new/.rss"
 FORUM = "https://forum.example.com/latest.rss"
@@ -87,7 +93,7 @@ def test_read_once_fetches_client_stations_and_sends_each_page():
     assert [sid for sid, _ in client.ingested] == ["s1", "s3"]
     assert client.ingested[0][1][0]["published"] == "2026-09-25T09:01:00Z"
     assert counts == {"stations": 2, "sent": 2, "entries": 4, "empty": 0, "skipped": 0,
-                      "rate_limited": 0, "errors": 0}
+                      "rate_limited": 0, "errors": 0, "reddit_ended": 0}
 
 
 def test_read_once_counts_empty_feeds_skips_and_errors_and_carries_on():
@@ -160,6 +166,27 @@ def test_one_pass_exits_cleanly():
         assert reader.run_reader(_Client([]), once=True, log=lambda m: None) == 0
     finally:
         reader.read_once = original
+
+
+def test_from_13_november_reddit_feeds_are_reported_as_ended_not_fetched():
+    fetched, slept, logs = [], [], []
+    reader._now = lambda: datetime(2026, 11, 13, tzinfo=timezone.utc)
+    try:
+        counts = reader.read_once(_Client(_stations()),
+                                  fetch=lambda u, agent=None: fetched.append(u) or {"entries": [_entry(1)]},
+                                  sleep=slept.append, log=logs.append)
+    finally:
+        reader._now = lambda: BEFORE_END
+    assert counts["reddit_ended"] == 1 and counts["sent"] == 1
+    assert fetched == [FORUM], "a Reddit feed is never fetched after the end"
+    assert slept == [], "no wait before the only feed actually fetched"
+    assert any("Reddit ended its RSS feeds on 13 November 2026" in m for m in logs)
+
+
+def test_reddit_feed_detection():
+    assert reader.is_reddit_feed(REDDIT) and reader.is_reddit_feed("https://old.reddit.com/r/x/.rss")
+    assert not reader.is_reddit_feed(FORUM) and not reader.is_reddit_feed("https://reddit.com.example/x")
+    assert not reader.is_reddit_feed(None)
 
 
 if __name__ == "__main__":

@@ -101,6 +101,11 @@ signalpipe-daemon read --once     # one pass and exit, for cron
 Run it beside `run`, in its own terminal or service. A station the brain has
 just judged is skipped for a few minutes, so an extra pass costs nothing.
 
+**Reddit ends its RSS feeds on 13 November 2026.** From that date the reader
+no longer fetches Reddit feeds: each is reported as ended, so you can pause or
+remove it and add a forum, a Q&A site or a Hacker News search instead. Until
+then, Reddit feeds are read as before.
+
 ## Check a feed before you add it
 
 Which communities you listen to decides results more than any setting. `preview`
@@ -108,7 +113,7 @@ reads a candidate feed on this machine, sends its posts to the brain, and the
 brain's judges read the ones that match your product best. Nothing is saved.
 
 ```bash
-signalpipe-daemon preview --product <product-id> --url https://www.reddit.com/r/SUBREDDIT/new/.rss
+signalpipe-daemon preview --product <product-id> --url https://FORUM/latest.rss
 ```
 
 The verdict comes from thresholds fixed in advance: **VIABLE** (real buyers post
